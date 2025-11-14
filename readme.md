@@ -1,119 +1,187 @@
-Here is a clean, polished **README.md** for your `jira-agent` repo ⬇️
-(You can copy-paste directly into your project.)
+# **QuickRef — AI-Powered Jira Reference Finder**
+
+**QuickRef** is an AI-driven Streamlit application that helps you instantly find similar Jira issues, generate reference tickets, and recommend next actions.
+It uses **SentenceTransformer embeddings**, **Annoy** for fast similarity search, and **incremental training** to continuously improve as new Jira issues are added.
 
 ---
 
-# **Jira Agent**
+## 🚀 Features
 
-A lightweight, agentic automation framework that processes Jira issues, extracts insights, and recommends actions using AI-driven logic.
-Built to streamline issue triage, action generation, and workflow automation.
-
----
-
-## 🚀 **Features**
-
-* **AI-powered recommended actions** generated from Jira issue comments
-* **Config-driven pipeline** for flexible rule execution
-* **Dynamic parameter resolution** using YAML + Pydantic v2
-* **Email templating support** for automated notifications
-* **Plug-and-play functions** for extracting assignees, status, comments, and more
-* **Supports incremental updates** and scalable issue ingestion
-* **ML embedding support** (Annoy / Sentence Transformers)
-* **Extendable agentic architecture** for future tasks (summaries, prioritization, routing)
+* 🔍 **Semantic reference search** using embeddings (`all-MiniLM-L6-v2`)
+* ⚡ **Annoy** for fast approximate nearest-neighbor lookups
+* 🧠 **Incremental training** — newly submitted issues automatically update the JSON store & Annoy index
+* 📥 **Single Issue input** or **CSV upload**
+* 🗃️ **Training dataset** persisted in `issues_normalized.json`
+* 🎯 **Top-K reference matches** with similarity scores
+* 👤 **Potential assignee predictions**
+* 📄 **Recommended actions** derived from past issues
+* 📊 **Training Viewer** built into the UI
+* 🧱 Fully configurable via `config.yml`
 
 ---
 
-## 📁 **Project Structure**
+## 🧩 Architecture Overview
 
 ```
-jira-agent/
+User Input (Single Issue / CSV)
+            │
+            ▼
+        Streamlit UI
+            │
+            ▼
+   Issue Normalization (build_issue_record)
+            │
+            ▼
+  ┌─────────────────────────────┐
+  │  Training Mode (optional)   │
+  │   ├── append_to_json_store  │ → updates JSON dataset
+  │   └── add_index_new_Data    │ → updates Annoy index
+  └─────────────────────────────┘
+            │
+            ▼
+Embedding Model (all-MiniLM-L6-v2)
+            │
+            ▼
+   ANN Search via Annoy (top_k matches)
+            │
+            ▼
+find_reference_issues()
+    → matches, scores, assignee
+            │
+            ▼
+find_recommended_actions()
+            │
+            ▼
+       UI Output + CSV Download
+```
+
+---
+
+## 📁 Project Structure
+
+```
+QuickRef/
 ├── src/
-│   ├── main.py
+│   ├── main.py                   # Streamlit application
+│   ├── core/
+│   │   ├── ingest.py             # CSV ingest + JSON appender
+│   │   ├── Index.py              # Annoy index management
+│   │   ├── Reference_Issue.py    # Semantic reference finder
+│   │   ├── Recommended_Actions.py# Recommended action generator
+│   │   ├── training_view.py      # Viewer for training data
 │   ├── utils/
-│   ├── processors/
-│   ├── models/
-│   ├── config/
-│   └── ...
+│   │   └── utilis.py             # config loader/helpers
+│   ├── embedding/                # embedding + Annoy index dirs
+├── out/
+│   ├── issues_normalized.json     # training data
+│   └── staging/                   # saved input CSVs
+├── config.yml
 └── README.md
 ```
 
 ---
 
-## ⚙️ **How It Works (High Level)**
+## ⚙️ How It Works (Step-by-Step)
 
-1. **Fetch Jira Issues** (JSON input or direct API).
-2. **Extract relevant fields** (assignee, comments, category, custom fields).
-3. **Generate recommended actions** (currently from comments → later via LLM).
-4. **Validate & transform** using Pydantic models.
-5. **Resolve email templates** and produce final outputs.
-6. **Optionally store embeddings** with Annoy for semantic lookup.
+### **1. Input Selection**
+
+Choose between:
+
+* **Single Issue** (manual fields)
+* **CSV Upload**
+
+### **2. Normalize Issue**
+
+Uses `build_issue_record()` to create a standardized issue dictionary.
+
+### **3. Save to staging**
+
+Every run stores user inputs in `out/staging/` with timestamp.
+
+### **4. Training Mode (optional)**
+
+When `TrainingModel: true` in `config.yml`:
+
+* `append_to_json_store()` → adds issue to dataset
+* `add_index_new_Data()` → embeds + updates Annoy index
+
+### **5. Find Reference Issues**
+
+Core logic via:
+
+```
+refs, potential_assignee = find_reference_issues(...)
+```
+
+This performs:
+
+* Embedding via all-MiniLM-L6-v2
+* Annoy search
+* Similarity scoring
+* Threshold filtering
+* Potential assignee calculation
+
+### **6. Show Results**
+
+* Sorted table of matches
+* CSV export
+
+### **7. Recommended Actions**
+
+`find_recommended_actions()` looks up past actions from the JSON dataset.
+
+### **8. Training Viewer**
+
+`show_training_viewer()` displays the entire training store in a searchable table.
 
 ---
 
-## 🧩 **Core Code Snippets**
+## 🧪 Configuration (`config.yml`)
 
-### Extracting Assignee
+```yaml
+ModelPath: "all-MiniLM-L6-v2"
+EmbeddingFolder: "src/embedding"
+TrainingModel: true
 
-```python
-def _extract_assignee(issue):
-    ...
-```
+Annoy:
+  num_trees: 50
+  index_file: "src/embedding/index.ann"
 
-### Recommended Action (current version)
-
-```python
-# TODO: Replace with LLM-powered rewriter
-recommended_action = issue.get("comments")
+Similarity:
+  threshold: 0.55
+  top_k: 5
 ```
 
 ---
 
-## 🛠️ **Setup**
+## ▶️ Run the App
 
-### Install dependencies
+### **Install dependencies**
 
-```bash
+```
 pip install -r requirements.txt
 ```
 
-### Run the project
+### **Launch Streamlit**
 
-```bash
-python src/main.py
+```
+streamlit run src/main.py
 ```
 
 ---
 
-## 🧪 **Testing**
+## 🧠 Tech Stack
 
-```bash
-pytest
-```
-
----
-
-## 🔮 **Roadmap**
-
-* [ ] Replace simple comment → action logic with LLM transformation
-* [ ] Add vector search to recommend similar issue resolutions
-* [ ] Add multi-step agent for automated triage
-* [ ] Add CLI interface
-* [ ] Add end-to-end config tutorials
+* Streamlit
+* SentenceTransformers (`all-MiniLM-L6-v2`)
+* Annoy
+* Pandas
+* Pydantic v2
+* YAML
 
 ---
 
-## 👤 **Author**
+## 👤 Author
 
 **Rohit Jishtu**
 GitHub: [@RohitJishtu](https://github.com/RohitJishtu)
-
----
-
-If you want, I can also generate:
-
-✅ A logo
-✅ A `.gitignore`
-✅ A fully documented architecture diagram
-✅ Example config files for YAML + Pydantic
-
-Just tell me!
